@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AssetsModule } from './assets/assets.module.js';
 import configuration from './config/configuration.js';
 import { validate } from './config/env.validation.js';
+import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 
 @Module({
@@ -33,6 +34,7 @@ import { HealthModule } from './health/health.module.js';
       }),
     }),
     AssetsModule,
+    DatabaseModule,
     HealthModule,
   ],
 })

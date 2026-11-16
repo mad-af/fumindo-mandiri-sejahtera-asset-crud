@@ -5,6 +5,22 @@ Aplikasi CRUD management aset yang terdiri dari **database PostgreSQL**, **REST 
 
 ![Screenshot dashboard](docs/screenshot-dashboard.png)
 
+## Bonus &mdash; Database Inspector
+
+Selain memenuhi 3 requirement soal, aplikasi ini juga punya tab **Database** yang menampilkan
+database PostgreSQL secara langsung: daftar tabel, isi baris mentah, struktur skema lengkap, dan
+query runner SQL.
+
+![Screenshot database inspector](docs/screenshot-database.png)
+
+Endpoint barunya bersifat **read-only** dengan dua lapis proteksi:
+
+1. **Filter di aplikasi** &mdash; hanya `SELECT` yang diterima, statement berbahaya dan query
+   multi-statement ditolak.
+2. **Transaksi `READ ONLY` di PostgreSQL** &mdash; pengaman utama. PostgreSQL sendiri yang
+   menolak setiap percobaan penulisan data (termasuk *data-modifying CTE*), sehingga data tetap
+   aman bahkan untuk query yang lolos filter.
+
 ---
 
 ## Daftar Isi
@@ -27,6 +43,7 @@ Aplikasi CRUD management aset yang terdiri dari **database PostgreSQL**, **REST 
 | 1 | Database PostgreSQL bernama `asset_fumindo` dengan tabel `asset` (field `asset_id`, `asset_name`, `stock_quantity`, `category` dengan nilai `Consumable` / `Non-Consumable`) | `db/schema.sql` &mdash; enum native PostgreSQL, constraint, index, trigger `updated_at`. Dibuat otomatis oleh `db/setup.sh`. |
 | 2 | API NestJS untuk operasi CRUD pada tabel `asset` | `api/` &mdash; RESTful endpoint lengkap + filter, pagination, validasi, error handling, Swagger UI, health check, dan test otomatis. |
 | 3 | Halaman web Vue.js untuk CRUD, terintegrasi dengan API NestJS | `web/` &mdash; Vue 3 + Vite + TypeScript, tabel dengan pencarian/filter/pagination, modal form, dialog konfirmasi hapus, toast, dan state loading/error/empty. |
+| + | *(bonus)* Menampilkan isi database secara langsung di aplikasi | Tab **Database Inspector**: daftar tabel, baris mentah, struktur skema (kolom/constraint/index/enum), dan query runner SQL read-only. |
 
 ---
 
@@ -63,22 +80,24 @@ Aplikasi CRUD management aset yang terdiri dari **database PostgreSQL**, **REST 
 │   │   │   └── entities/                # entity TypeORM + enum kategori
 │   │   ├── common/filters/   # normalisasi format error
 │   │   ├── config/           # konfigurasi & validasi env
-│   │   ├── database/seed.ts  # data contoh
+│   │   ├── database/         # Database Inspector (read-only) + script seed
 │   │   └── health/           # GET /api/health
-│   ├── test/assets.e2e-spec.ts          # e2e test (Supertest)
+│   ├── test/                 # e2e test (Supertest)
 │   └── .env.example
 │
 ├── web/                      # Frontend Vue 3
 │   ├── src/
-│   │   ├── App.vue
-│   │   ├── api/              # client fetch + endpoint asset
+│   │   ├── App.vue           # shell aplikasi + tab navigasi
+│   │   ├── api/              # client fetch + endpoint asset & database
 │   │   ├── components/       # tabel, modal form, dialog, toast, stats
+│   │   ├── components/database/  # panel database inspector
 │   │   ├── composables/      # useAssets, useToast
-│   │   ├── types/asset.ts
+│   │   ├── types/            # tipe asset & database
+│   │   ├── views/            # AssetManagerView, DatabaseView
 │   │   └── style.css         # design tokens + komponen dasar
 │   └── vite.config.ts        # proxy /api -> backend
 │
-└── docs/screenshot-dashboard.png
+└── docs/                     # screenshot untuk dokumentasi
 ```
 
 ---
@@ -190,6 +209,10 @@ Base URL: `http://localhost:3001/api`
 | `PATCH` | `/assets/:id` | Perbarui asset (field opsional) | `200` / `404` |
 | `DELETE` | `/assets/:id` | Hapus asset | `204` / `404` |
 | `GET` | `/health` | Health check aplikasi + database | `200` |
+| `GET` | `/database/tables` | Daftar tabel pada schema `public` + jumlah baris | `200` |
+| `GET` | `/database/tables/:table/schema` | Struktur tabel: kolom, constraint, index, enum | `200` / `404` |
+| `GET` | `/database/tables/:table/rows` | Baris mentah sebuah tabel | `200` / `404` |
+| `POST` | `/database/query` | Jalankan query `SELECT` (read-only, maks. 500 baris) | `201` / `400` |
 
 ### Contoh
 
@@ -256,14 +279,16 @@ Untuk error `500`, pesan internal **tidak dibocorkan** ke client &mdash; hanya d
 ```bash
 cd api
 npm test          # 11 unit test   - service layer dengan mock repository
-npm run test:e2e  # 14 e2e test    - endpoint HTTP dengan Supertest
+npm run test:e2e  # 25 e2e test    - endpoint HTTP dengan Supertest
 ```
 
 - **Unit test** menguji logika service: perhitungan pagination, filter pencarian & kategori,
   create/update/remove, serta penanganan `NotFoundException`.
 - **E2E test** menguji endpoint HTTP sungguhan terhadap database `asset_fumindo_test`: alur CRUD
-  lengkap, penolakan data tidak valid (400), asset tidak ditemukan (404), dan health check.
-  Tabel dikosongkan sebelum tiap test agar hasil tidak saling memengaruhi.
+  lengkap, penolakan data tidak valid (400), asset tidak ditemukan (404), health check, serta
+  modul Database Inspector (termasuk penolakan query yang mencoba menulis ke database).
+  Tabel dikosongkan sebelum tiap test agar hasil tidak saling memengaruhi, dan file e2e
+  dijalankan berurutan karena berbagi tabel yang sama.
 
 ---
 
@@ -282,6 +307,13 @@ npm run test:e2e  # 14 e2e test    - endpoint HTTP dengan Supertest
 - **Debugrisan.** `pg_hba.conf` lokal memakai `trust`, sehingga kredensial di `.env` tidak
   diuji secara ketat pada mesin ini. Pada lingkungan produksi, gunakan autentikasi
   `scram-sha-256` dan simpan kredensial di secret manager.
+- **Database Inspector dijaga read-only.** Lapis pertama adalah filter di aplikasi (hanya
+  `SELECT`, tanpa statement berbahaya, tanpa multi-statement). Lapis kedua adalah transaksi
+  `READ ONLY`, sehingga PostgreSQL sendiri menolak percobaan penulisan data. Lapis kedua tetap
+  dipasang walau filter sudah menanganinya, sebagai pengaman untuk kasus yang tidak terbaca
+  oleh filter teks.
+- **Nama kolom diambil dari `information_schema`** pada endpoint baris mentah, bukan dari hasil
+  query, supaya daftar kolom tetap tampil walaupun tabel sedang kosong.
 - **Migrasi.** Pada proyek nyata, skema sebaiknya dikelola dengan migration TypeORM
   (`typeorm migration:generate`) alih-alih `schema.sql`, agar setiap perubahan skema berikutnya
   tercatat kronologis di repository.
