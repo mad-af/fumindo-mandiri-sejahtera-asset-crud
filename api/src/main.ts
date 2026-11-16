@@ -1,35 +1,23 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
+import { configureApp } from './app.setup.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT') ?? 3000;
+  const port = configService.get<number>('PORT') ?? 3001;
 
-  // Seluruh endpoint berada di bawah prefix /api
-  app.setGlobalPrefix('api');
+  // Prefix route, validasi input, dan format error.
+  configureApp(app);
 
   // Mengizinkan frontend (Vite dev server) memanggil API ini.
   app.enableCors({
     origin: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
   });
-
-  // Validasi input global: whitelist + tolak property tak dikenal.
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-
-  // Format error response yang konsisten untuk semua endpoint.
-  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Dokumentasi API otomatis (Swagger UI).
   const swaggerConfig = new DocumentBuilder()
