@@ -159,6 +159,44 @@ masalah CORS selama development.
 | `npm run test:e2e` | E2E test (Supertest) |
 | `npm run lint` | Lint dengan oxlint |
 
+### Troubleshooting
+
+**Port sudah dipakai** &mdash; gejala: `EADDRINUSE: address already in use :::3001` di backend,
+atau Vite berpindah sendiri ke port `5174`.
+
+Backend sengaja memakai `3001` karena `3000` sering sudah terpakai. Kalau `3001` pun bentrok,
+ubah di **dua tempat** supaya tetap sinkron:
+
+1. `api/.env` &rarr; `PORT=3002`
+2. `web/vite.config.ts` &rarr; `target: 'http://localhost:3002'`
+
+Kalau tombol "Dokumentasi API" di header juga perlu menyesuaikan, buat `web/.env` berisi:
+
+```bash
+VITE_API_DOCS_URL=http://localhost:3002/api/docs
+```
+
+**Gagal konek ke database** &mdash; pastikan PostgreSQL hidup (`pg_isready`), lalu cocokkan
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, dan `DB_NAME` di `api/.env` dengan hasil
+`db/setup.sh`.
+
+**`permission denied to create role` saat `db/setup.sh`** &mdash; user PostgreSQL yang dipakai
+belum punya hak `CREATEROLE`. Jalankan dengan superuser yang benar:
+
+```bash
+PG_SUPERUSER=nama_user_superuser ./db/setup.sh --with-test
+```
+
+Di Homebrew PostgreSQL, biasanya user OS Anda yang superuser (role `postgres` justru tidak
+punya hak ini).
+
+**`npm run db:seed` tidak mengisi data** &mdash; skrip sengaja melewati tabel yang sudah berisi
+data agar tidak menimpa. Untuk mereset:
+
+```bash
+npm run db:reset   # hapus isi tabel lalu seed ulang
+```
+
 ---
 
 ## Desain Database

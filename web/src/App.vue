@@ -8,6 +8,10 @@ type Tab = 'assets' | 'database';
 
 const activeTab = ref<Tab>('assets');
 
+// Bisa dioverride lewat web/.env bila port backend berbeda.
+const API_DOCS_URL =
+  import.meta.env.VITE_API_DOCS_URL ?? 'http://localhost:3001/api/docs';
+
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   {
     id: 'assets',
@@ -51,7 +55,7 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
 
       <a
         class="btn btn-secondary"
-        href="http://localhost:3001/api/docs"
+        :href="API_DOCS_URL"
         target="_blank"
         rel="noopener"
       >
